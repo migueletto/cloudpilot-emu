@@ -1,0 +1,280 @@
+#define sysTrapCncMgrProfileSettingGet            1
+#define sysTrapCncMgrProfileSettingSet            2
+#define sysTrapCncMgrProfileGetCurrent            3
+#define sysTrapCncMgrProfileSetCurrent            4
+#define sysTrapCncMgrProfileGetIDFromName         5
+#define sysTrapCncMgrProfileCreate              6
+#define sysTrapCncMgrProfileDelete              7
+#define sysTrapCncMgrProfileGetIDFromIndex          8
+#define sysTrapCncMgrProfileGetIndex            9
+#define sysTrapCncMgrProfileCount             10
+#define sysTrapCncMgrProfileOpenDB              11
+#define sysTrapCncMgrProfileCloseDB             12
+
+#define sysTrapExpansionMgr sysTrapExpansionDispatch
+
+#define expInit         0
+#define expSlotDriverInstall  1
+#define expSlotDriverRemove 2
+#define expSlotLibFind      3
+#define expSlotRegister     4
+#define expSlotUnregister   5
+#define expCardInserted     6
+#define expCardRemoved      7
+#define expCardPresent      8
+#define expCardInfo       9
+#define expSlotEnumerate    10
+#define expCardGetSerialPort  11
+
+#define sysFloatBase10Info      0
+#define sysFloatFToA          1
+#define sysFloatAToF          2
+#define sysFloatCorrectedAdd    3
+#define sysFloatCorrectedSub    4
+#define sysFloatVersion       5
+#define sysFloatEm_fp_round   0
+#define sysFloatEm_fp_get_fpscr 1
+#define sysFloatEm_fp_set_fpscr 2
+#define sysFloatEm_f_utof     3
+#define sysFloatEm_f_itof     4
+#define sysFloatEm_f_ulltof   5
+#define sysFloatEm_f_lltof      6
+#define sysFloatEm_d_utod     7
+#define sysFloatEm_d_itod     8
+#define sysFloatEm_d_ulltod   9
+#define sysFloatEm_d_lltod      10
+#define sysFloatEm_f_ftod     11
+#define sysFloatEm_d_dtof     12
+#define sysFloatEm_f_ftoq     13
+#define sysFloatEm_f_qtof     14
+#define sysFloatEm_d_dtoq     15
+#define sysFloatEm_d_qtod     16
+#define sysFloatEm_f_ftou     17
+#define sysFloatEm_f_ftoi     18
+#define sysFloatEm_f_ftoull   19
+#define sysFloatEm_f_ftoll      20
+#define sysFloatEm_d_dtou     21
+#define sysFloatEm_d_dtoi     22
+#define sysFloatEm_d_dtoull   23
+#define sysFloatEm_d_dtoll      24
+#define sysFloatEm_f_cmp      25
+#define sysFloatEm_f_cmpe     26
+#define sysFloatEm_f_feq      27
+#define sysFloatEm_f_fne      28
+#define sysFloatEm_f_flt      29
+#define sysFloatEm_f_fle      30
+#define sysFloatEm_f_fgt      31
+#define sysFloatEm_f_fge      32
+#define sysFloatEm_f_fun      33
+#define sysFloatEm_f_for      34
+#define sysFloatEm_d_cmp      35
+#define sysFloatEm_d_cmpe     36
+#define sysFloatEm_d_feq      37
+#define sysFloatEm_d_fne      38
+#define sysFloatEm_d_flt      39
+#define sysFloatEm_d_fle      40
+#define sysFloatEm_d_fgt      41
+#define sysFloatEm_d_fge      42
+#define sysFloatEm_d_fun      43
+#define sysFloatEm_d_for      44
+#define sysFloatEm_f_neg      45
+#define sysFloatEm_f_add      46
+#define sysFloatEm_f_mul      47
+#define sysFloatEm_f_sub      48
+#define sysFloatEm_f_div      49
+#define sysFloatEm_d_neg      50
+#define sysFloatEm_d_add      51
+#define sysFloatEm_d_mul      52
+#define sysFloatEm_d_sub      53
+#define sysFloatEm_d_div      54
+
+#define HDSelectorBmpGetNextBitmapAnyDensity    0
+#define HDSelectorBmpGetVersion           1
+#define HDSelectorBmpGetCompressionType       2
+#define HDSelectorBmpGetDensity           3
+#define HDSelectorBmpSetDensity           4
+#define HDSelectorBmpGetTransparentValue      5
+#define HDSelectorBmpSetTransparentValue      6
+#define HDSelectorBmpCreateBitmapV3         7
+#define HDSelectorWinSetCoordinateSystem      8
+#define HDSelectorWinGetCoordinateSystem      9
+#define HDSelectorWinScalePoint           10
+#define HDSelectorWinUnscalePoint         11
+#define HDSelectorWinScaleRectangle         12
+#define HDSelectorWinUnscaleRectangle       13
+#define HDSelectorWinScreenGetAttribute       14
+#define HDSelectorWinPaintTiledBitmap       15
+#define HDSelectorWinGetSupportedDensity      16
+#define HDSelectorEvtGetPenNative         17
+#define HDSelectorWinScaleCoord           18
+#define HDSelectorWinUnscaleCoord         19
+#define HDSelectorWinPaintRoundedRectangleFrame 20
+#define HDSelectorWinSetScalingMode         21
+#define HDSelectorWinGetScalingMode         22
+
+#define intlIntlInit          0
+#define intlTxtByteAttr         1
+#define intlTxtCharAttr         2
+#define intlTxtCharXAttr        3
+#define intlTxtCharSize         4
+#define intlTxtGetPreviousChar      5
+#define intlTxtGetNextChar        6
+#define intlTxtGetChar          7
+#define intlTxtSetNextChar        8
+#define intlTxtCharBounds       9
+#define intlTxtPrepFindString     10
+#define intlTxtFindString       11
+#define intlTxtReplaceStr       12
+#define intlTxtWordBounds       13
+#define intlTxtCharEncoding       14
+#define intlTxtStrEncoding        15
+#define intlTxtEncodingName       16
+#define intlTxtMaxEncoding        17
+#define intlTxtTransliterate      18
+#define intlTxtCharIsValid        19
+#define intlTxtCompare          20
+#define intlTxtCaselessCompare      21
+#define intlTxtCharWidth        22
+#define intlTxtGetTruncationOffset    23
+#define intlIntlGetRoutineAddress   24
+#define intlIntlHandleEvent       25
+#define intlTxtParamString        26
+#define intlTxtConvertEncodingV35   27
+#define intlTxtConvertEncoding      28
+#define intlIntlSetRoutineAddress   29
+#define intlTxtGetWordWrapOffset    30
+#define intlTxtNameToEncoding     31
+#define intlIntlStrictChecks      32
+#define intlTxtUpperChar          33
+#define intlTxtLowerChar          34
+
+#define vfsTrapInit           0
+#define vfsTrapCustomControl      1
+#define vfsTrapFileCreate       2
+#define vfsTrapFileOpen         3
+#define vfsTrapFileClose        4
+#define vfsTrapFileReadData     5
+#define vfsTrapFileRead         6
+#define vfsTrapFileWrite        7
+#define vfsTrapFileDelete       8
+#define vfsTrapFileRename       9
+#define vfsTrapFileSeek         10
+#define vfsTrapFileEOF          11
+#define vfsTrapFileTell         12
+#define vfsTrapFileResize       13
+#define vfsTrapFileGetAttributes    14
+#define vfsTrapFileSetAttributes    15
+#define vfsTrapFileGetDate        16
+#define vfsTrapFileSetDate        17
+#define vfsTrapFileSize         18
+#define vfsTrapDirCreate        19
+#define vfsTrapDirEntryEnumerate    20
+#define vfsTrapGetDefaultDirectory  21
+#define vfsTrapRegisterDefaultDirectory 22
+#define vfsTrapUnregisterDefaultDirectory 23
+#define vfsTrapVolumeFormat     24
+#define vfsTrapVolumeMount        25
+#define vfsTrapVolumeUnmount      26
+#define vfsTrapVolumeEnumerate    27
+#define vfsTrapVolumeInfo       28
+#define vfsTrapVolumeGetLabel     29
+#define vfsTrapVolumeSetLabel     30
+#define vfsTrapVolumeSize       31
+#define vfsTrapInstallFSLib     32
+#define vfsTrapRemoveFSLib        33
+#define vfsTrapImportDatabaseFromFile 34
+#define vfsTrapExportDatabaseToFile   35
+#define vfsTrapFileDBGetResource    36
+#define vfsTrapFileDBInfo       37
+#define vfsTrapFileDBGetRecord    38
+#define vfsTrapImportDatabaseFromFileCustom 39
+#define vfsTrapExportDatabaseToFileCustom   40
+#define vfsTrapPrivate1         41
+
+#define omInit              0
+#define omOpenOverlayDatabase   1
+#define omLocaleToOverlayDBName 2
+#define omOverlayDBNameToLocale 3
+#define omGetCurrentLocale      4
+#define omGetIndexedLocale      5
+#define omGetSystemLocale     6
+#define omSetSystemLocale     7
+#define omGetRoutineAddress   8
+#define omGetNextSystemLocale   9
+
+#define pinPINSetInputAreaState       0
+#define pinPINGetInputAreaState       1
+#define pinPINSetInputTriggerState      2
+#define pinPINGetInputTriggerState      3
+#define pinPINAltInputSystemEnabled     4
+#define pinPINGetCurrentPinletName      5
+#define pinPINSwitchToPinlet        6
+#define pinPINCountPinlets          7
+#define pinPINGetPinletInfo         8
+#define pinPINSetInputMode          9
+#define pinPINGetInputMode          10
+#define pinPINClearPinletState        11
+#define pinPINShowReferenceDialog     12
+#define pinWinSetConstraintsSize      13
+#define pinFrmSetDIAPolicyAttr        14
+#define pinFrmGetDIAPolicyAttr        15
+#define pinStatHide             16
+#define pinStatShow             17
+#define pinStatGetAttribute         18
+#define pinSysGetOrientation              19
+#define pinSysSetOrientation              20
+#define pinSysGetOrientationTriggerState  21
+#define pinSysSetOrientationTriggerState  22
+
+#define sysSerialInstall        0
+#define sysSerialOpen         1
+#define sysSerialOpenBkgnd        2
+#define sysSerialClose          3
+#define sysSerialSleep          4
+#define sysSerialWake         5
+#define sysSerialGetDeviceCount   6
+#define sysSerialGetDeviceInfo    7
+#define sysSerialGetStatus        8
+#define sysSerialClearErr       9
+#define sysSerialControl        10
+#define sysSerialSend         11
+#define sysSerialSendWait       12
+#define sysSerialSendCheck        13
+#define sysSerialSendFlush        14
+#define sysSerialReceive        15
+#define sysSerialReceiveWait      16
+#define sysSerialReceiveCheck     17
+#define sysSerialReceiveFlush     18
+#define sysSerialSetRcvBuffer     19
+#define sysSerialRcvWindowOpen    20
+#define sysSerialRcvWindowClose   21
+#define sysSerialSetWakeupHandler 22
+#define sysSerialPrimeWakeupHandler 23
+#define sysSerialOpenV4         24
+#define sysSerialOpenBkgndV4      25
+#define sysSerialCustomControl    26
+
+#define tsmGetFepMode       0
+#define tsmSetFepMode       1
+#define tsmHandleEvent        2
+#define tsmInit           3 // new in 4.0
+#define tsmDrawMode         4 // new in 4.0
+#define tsmGetSystemFep     5 // new in 4.0
+#define tsmSetSystemFep     6 // new in 4.0
+#define tsmGetCurrentFep      7 // new in 4.0
+#define tsmSetCurrentFep      8 // new in 4.0
+#define tsmGetSystemFepCreator  9 // new in 5.0
+#define tsmSetSystemFepCreator  10  // new in 5.0
+#define tsmGetCurrentFepCreator 11  // new in 5.0
+#define tsmSetCurrentFepCreator 12  // new in 5.0
+#define   tsmFepHandleEvent     13  // new in 5.0
+#define   tsmFepMapEvent        14  // new in 5.0
+#define   tsmFepTerminate     15  // new in 5.0
+#define   tsmFepReset         16  // new in 5.0
+#define   tsmFepCommitAction    17  // new in 5.0
+#define   tsmFepOptionsList     18  // new in 5.0
+
+#define sysUdaControl         0
+#define sysUdaMemoryReaderNew     1
+#define sysUdaExchangeReaderNew     11
+#define sysUdaExchangeWriterNew     12

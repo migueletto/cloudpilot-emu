@@ -353,6 +353,8 @@ void EmCPU68K::DoSaveLoad(T& helper) {
 //		� EmCPU68K::Execute
 // ---------------------------------------------------------------------------
 
+void trapReturnHook(uint32_t pc, uint32_t sp);
+
 uint32 EmCPU68K::Execute(uint32 maxCycles) {
     // This function is the bottleneck for all 68K emulation.  It's
     // important that it run as quickly as possible.  To that end,
@@ -418,6 +420,7 @@ uint32 EmCPU68K::Execute(uint32 maxCycles) {
 
         EmOpcode68K opcode;
 
+        trapReturnHook(pc, GetSP());
         opcode = EmMemGet16(pc);
 #ifdef TRACE_FUNCTION_CALLS
         traceFunctionCalls(opcode, pc);

@@ -1,4 +1,4 @@
-all: bin emscripten
+all: bin
 
 bin:
 	$(MAKE) -Csrc bin

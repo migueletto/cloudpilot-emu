@@ -33,6 +33,8 @@
 #include "ROMStubs.h"
 #include "UAE.h"  // CHECK_STACK_POINTER_DECREMENT
 
+#include "Palm.h"
+
 #define LOG_FUNCTION_CALLS 0
 
 namespace {
@@ -237,6 +239,304 @@ Bool EmPalmOS::HandleJSR_Ind(emuptr oldpc, emuptr dest) {
  *
  ***********************************************************************/
 
+extern "C" {
+#include "selectors.h"
+#include "trapArgs.c"
+};
+
+static uint32_t stackp;
+static uint32_t stack[256];
+static uint32_t stackt[256];
+
+static trap_t allTraps[0x10000];
+
+static int allTrapsInited = 0;
+
+static void allTrapsInit(void) {
+  int i;
+
+  for (i = 0; i < 0x10000; i++) {
+    allTraps[i] = {0};
+    allTraps[i].name = "unknown";
+  }
+
+  for (i = 0; trapArgs[i].name; i++) {
+    allTraps[trapArgs[i].trap] = trapArgs[i];
+  }
+}
+
+typedef union {
+  uint32_t t;
+  uint8_t c[4];
+} creator_id_t;
+
+static char *id2s(uint32_t ID, char *s) {
+  creator_id_t id;
+
+  id.t = ID;
+  s[0] = id.c[3];
+  s[1] = id.c[2];
+  s[2] = id.c[1];
+  s[3] = id.c[0];
+  s[4] = 0;
+
+  return s;
+}
+
+static char *param_value(uint32_t type, uint32_t value, uint32_t size, char *aux, uint32_t len) {
+  char str[128], sid[8];
+  uint32_t j;
+
+        switch (type) {
+          case T_SIG:  snprintf(aux, len - 1, "%d", (int32_t)value); break;
+          case T_USIG: snprintf(aux, len - 1, "%u", value); break;
+          case T_PTR:
+            if (value) {
+              snprintf(aux, len - 1, "0x%08X", value);
+            } else {
+              snprintf(aux, len - 1, "NULL");
+            }
+            break;
+          case T_CHAR:
+            if (value < 0x7F) {
+              snprintf(aux, len - 1, "'%c'", (char)value);
+            } else {
+              snprintf(aux, len - 1, "0x%02X", value);
+            }
+            break;
+          case T_WCHR:
+            if (value < 0x7F) {
+              snprintf(aux, len - 1, "'%c'", (char)value);
+            } else {
+              snprintf(aux, len - 1, "0x%04X", value);
+            }
+            break;
+          case T_ID:
+            id2s(value, sid);
+            snprintf(aux, len - 1, "'%s'", sid);
+            break;
+          case T_HEX:
+            switch (size) {
+              case 1: snprintf(aux, len - 1, "0x%02X", value); break;
+              case 2: snprintf(aux, len - 1, "0x%04X", value); break;
+              case 4: snprintf(aux, len - 1, "0x%08X", value); break;
+            }
+            break;
+          case T_STR:
+            if (value) {
+              for (j = 0; j < sizeof(str) - 1; j++) {
+                str[j] = EmMemGet8(value + j);
+                if (str[j] == 0) break;
+              }
+              str[j] = 0;
+              snprintf(aux, len - 1, "\"%s\"", str);
+            } else {
+              snprintf(aux, len - 1, "NULL");
+            }
+            break;
+          default:
+            snprintf(aux, len - 1, "type_%u", type);
+            break;
+        }
+
+  return aux;
+}
+
+static char *spaces(uint32_t n) {
+  static char buf[256];
+  uint32_t i;
+
+  for (i = 0; i < n && i < 256; i++) {
+    buf[i] = ' ';
+  }
+  buf[i] = 0;
+
+  return buf;
+}
+
+static void dumpMemory(uint32_t addr, uint32_t offset, uint32_t len) {
+  char sbuf[1024], abuf[32], *p, *e;
+  uint32_t i, j, n;
+  uint8_t b;
+
+  p = sbuf;
+  sprintf(p, "%08X: ", offset);
+  n = strlen(p);
+  p += n;
+  e = p + 1024 - n - 4;
+
+  for (i = 0, j = 0; i < len && p < e; i++) {
+    if (j) {
+      *p = ' ';
+      p++;
+    }
+    b = EmMemGet8(addr + i);
+    sprintf(p, "%02X", b);
+    abuf[j] = (b >= 32 && b < 127) ? b : '.';
+    p += 2;
+    j++;
+    if (j == 16) {
+      *p = 0;
+      abuf[j] = 0;
+      fprintf(stderr, "%s %s\n", sbuf, abuf);
+      p = sbuf;
+      sprintf(p, "%08X: ", offset+i+1);
+      n = strlen(p);
+      p += n;
+      e = p + 1024 - n - 4;
+      j = 0;
+    }
+  }
+  *p = 0;
+  abuf[j] = 0;
+
+  if (j) {
+    for (; j < 16; j++) {
+      *p++ = ' ';
+      *p++ = ' ';
+      *p++ = ' ';
+      *p = 0;
+    }
+    fprintf(stderr, "%s %s\n", sbuf, abuf);
+  }
+}
+
+static uint32_t log_dbID = 0;
+static uint32_t log_dbRef = 0;
+static FILE *log_f = NULL;
+
+void trapReturnHook(uint32_t pc, uint32_t sp) {
+  char buf[256];
+  uint32_t name, value;
+  uint16_t trap, i;
+
+  if (stackp && pc == stack[stackp-1]) {
+    value = 0;
+    stackp--;
+    trap = stackt[stackp];
+    if (allTraps[trap].rsize > 0) {
+      if (allTraps[trap].rtype == T_PTR || allTraps[trap].rtype == T_STR) {
+        value = gCPU->GetRegister(e68KRegID_A0);
+      } else {
+        value = gCPU->GetRegister(e68KRegID_D0);
+      }
+      if (log_f) {
+        param_value(allTraps[trap].rtype, value, allTraps[trap].rsize, buf, sizeof(buf));
+        fprintf(log_f, "0x%08X: trap 0x%04X %s%s return %s\n", pc, trap, spaces(stackp), allTraps[trap].name, buf);
+      }
+    } else if (log_f) {
+      fprintf(log_f, "0x%08X: trap 0x%04X %s%s return\n", pc, trap, spaces(stackp), allTraps[trap].name);
+    }
+
+    switch (trap) {
+      case sysTrapDmDatabaseInfo:
+        // Err DmDatabaseInfo(UInt16 cardNo, LocalID dbID, Char *nameP, ...
+        if (log_f == NULL && log_dbID == 0 && value == 0) {
+          name = EmMemGet32(sp + 6);
+          if (name) {
+            for (i = 0; i < sizeof(buf) - 1; i++) {
+              buf[i] = EmMemGet8(name + i);
+              if (buf[i] == 0) break;
+            }
+            buf[i] = 0;
+            if (strcmp(buf, "Memo Pad") == 0) {
+              log_dbID = EmMemGet32(sp + 2);
+              fprintf(stdout, "\nMonitoring dbID 0x%08X for \"%s\"\n", log_dbID, buf);
+            }
+          }
+        }
+        break;
+      case sysTrapDmOpenDatabase:
+        // DmOpenRef DmOpenDatabase(UInt16 cardNo, LocalID dbID, UInt16 mode)
+        if (log_f == NULL && log_dbRef == 0 && log_dbID != 0 && value != 0) {
+          if (EmMemGet32(sp + 2) == log_dbID) {
+            log_dbRef = value;
+            fprintf(stdout, "Monitoring dbRef 0x%08X for dbID 0x%08X\n", log_dbRef, log_dbID);
+	  }
+	}
+        break;
+      case sysTrapSysAppStartup:
+        // Err SysAppStartup(SysAppInfoPtr *appInfoPP, MemPtr *prevGlobalsP, MemPtr *globalsPtrP)
+        if (log_f == NULL && log_dbRef != 0 && value == 0) {
+          value = EmMemGet32(sp);    // SysAppInfoType **
+          value = EmMemGet32(value); // SysAppInfoType *
+          if (EmMemGet32(value + 16) == log_dbRef) {
+            fprintf(stdout, "Logging system calls for dbRef 0x%08X dbID 0x%08X\n", log_dbRef, log_dbID);
+            log_f = fopen("syscalls.txt", "w");
+	  }
+	}
+        break;
+      case sysTrapSysAppExit:
+        if (log_f) {
+          fprintf(stdout, "Stop logging system calls for dbRef 0x%08X dbID 0x%08X\n", log_dbRef, log_dbID);
+          fclose(log_f);
+          log_dbID = 0;
+          log_dbRef = 0;
+          log_f = NULL;
+	}
+        break;
+    }
+  }
+}
+
+static void trapHook(uint32_t pc, uint32_t sp, uint16_t trap, uint32_t nextpc) {
+  char buf[1024], aux[256];
+  uint32_t i, value, idx;
+
+  if (!allTrapsInited) {
+    allTrapsInit();
+    allTrapsInited = 1;
+  }
+
+  switch (trap) {
+    case sysTrapHwrDisableDataWrites:
+    case sysTrapHwrEnableDataWrites:
+    case sysTrapHwrDoze:
+    case sysTrapHwrDelay:
+    case sysTrapHwrDockStatus:
+    case sysTrapSysDoze:
+    case sysTrapSysTimerWrite:
+    case sysTrapSysEvGroupSignal:
+    case sysTrapSysEvGroupWait:
+    case sysTrapSysDisableInts:
+    case sysTrapSysRestoreStatus:
+    case sysTrapSysResSemaphoreReserve:
+    case sysTrapSysResSemaphoreRelease:
+    case sysTrapSysSemaphoreWait:
+    case sysTrapSysSemaphoreSignal:
+    case sysTrapSysTaskSwitching:
+    case sysTrapSysGetAppInfo:
+    case sysTrapMemSemaphoreReserve:
+    case sysTrapMemSemaphoreRelease:
+    case sysTrapAlmDisplayAlarm:
+    case sysTrapAttnDoEmergencySpecialEffects:
+    case sysTrapEvtDequeueKeyEvent:
+    case sysTrapEvtGetSysEvent:
+    case sysTrapHwrIRQ6Handler:
+    case sysTrapSysKernelClockTick:
+      break;
+
+    default:
+      idx = 0;
+      buf[0] = 0;
+      for (i = 0; i < allTraps[trap].nargs; i++) {
+        switch (allTraps[trap].args[i].size) {
+          case 1: value = EmMemGet16(sp + idx) & 0xFF; idx += 2; break;
+          case 2: value = EmMemGet16(sp + idx); idx += 2; break;
+          case 4: value = EmMemGet32(sp + idx); idx += 4; break;
+          default: value = 0; break;
+        }
+        param_value(allTraps[trap].args[i].type, value, allTraps[trap].args[i].size, aux, sizeof(aux));
+        if (i > 0) strncat(buf, ", ", sizeof(buf) - strlen(buf) - 1);
+        strncat(buf, aux, sizeof(buf) - strlen(buf) - 1);
+      }
+      if (log_f) fprintf(log_f, "0x%08X: trap 0x%04X %s%s(%s) ... 0x%08X\n", pc, trap, spaces(stackp), allTraps[trap].name, buf, nextpc);
+      stackt[stackp] = trap;
+      stack[stackp++] = nextpc;
+      break;
+  }
+}
+
 Bool EmPalmOS::HandleSystemCall(Bool fromTrap) {
     // ======================================================================
     //	First things first: if we need to break execution on the next call
@@ -305,6 +605,8 @@ Bool EmPalmOS::HandleSystemCall(Bool fromTrap) {
     //	If we completely handled the function in head and tail patches, tell
     //	the profiler that we exited the function and get out of here.
     // ======================================================================
+
+    trapHook(gCPU->GetPC() - 2, gCPU->GetSP(), context.fTrapWord, context.fNextPC);
 
     if (result == kSkipROM) {
         gCPU->SetPC(context.fNextPC);
