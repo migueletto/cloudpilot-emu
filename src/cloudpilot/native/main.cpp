@@ -330,7 +330,7 @@ int main(int argc, const char** argv) {
         .implicit_value(true);
 
     program.add_argument("--trace-syscalls")
-        .metavar("<trace syscalls>")
+        .metavar("<app name>")
         .help("trace system calls for an app");
 
     try {

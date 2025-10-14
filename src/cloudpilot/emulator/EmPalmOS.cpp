@@ -285,59 +285,66 @@ static char *id2s(uint32_t ID, char *s) {
 
 static char *param_value(uint32_t type, uint32_t value, uint32_t size, char *aux, uint32_t len) {
   char str[128], sid[8];
+  uint8_t red, green, blue;
   uint32_t j;
 
-        switch (type) {
-          case T_SIG:  snprintf(aux, len - 1, "%d", (int32_t)value); break;
-          case T_USIG: snprintf(aux, len - 1, "%u", value); break;
-          case T_PTR:
-            if (value) {
-              snprintf(aux, len - 1, "0x%08X", value);
-            } else {
-              snprintf(aux, len - 1, "NULL");
-            }
-            break;
-          case T_CHAR:
-            if (value < 0x7F) {
-              snprintf(aux, len - 1, "'%c'", (char)value);
-            } else {
-              snprintf(aux, len - 1, "0x%02X", value);
-            }
-            break;
-          case T_WCHR:
-            if (value < 0x7F) {
-              snprintf(aux, len - 1, "'%c'", (char)value);
-            } else {
-              snprintf(aux, len - 1, "0x%04X", value);
-            }
-            break;
-          case T_ID:
-            id2s(value, sid);
-            snprintf(aux, len - 1, "'%s'", sid);
-            break;
-          case T_HEX:
-            switch (size) {
-              case 1: snprintf(aux, len - 1, "0x%02X", value); break;
-              case 2: snprintf(aux, len - 1, "0x%04X", value); break;
-              case 4: snprintf(aux, len - 1, "0x%08X", value); break;
-            }
-            break;
-          case T_STR:
-            if (value) {
-              for (j = 0; j < sizeof(str) - 1; j++) {
-                str[j] = EmMemGet8(value + j);
-                if (str[j] == 0) break;
-              }
-              str[j] = 0;
-              snprintf(aux, len - 1, "\"%s\"", str);
-            } else {
-              snprintf(aux, len - 1, "NULL");
-            }
-            break;
-          default:
-            snprintf(aux, len - 1, "type_%u", type);
-            break;
+  switch (type) {
+    case T_SIG:  snprintf(aux, len - 1, "%d", (int32_t)value); break;
+    case T_USIG: snprintf(aux, len - 1, "%u", value); break;
+    case T_PTR:
+      if (value) {
+        snprintf(aux, len - 1, "0x%08X", value);
+      } else {
+        snprintf(aux, len - 1, "NULL");
+      }
+      break;
+    case T_CHAR:
+      if (value < 0x7F) {
+        snprintf(aux, len - 1, "'%c'", (char)value);
+      } else {
+        snprintf(aux, len - 1, "0x%02X", value);
+      }
+      break;
+    case T_WCHR:
+      if (value < 0x7F) {
+        snprintf(aux, len - 1, "'%c'", (char)value);
+      } else {
+        snprintf(aux, len - 1, "0x%04X", value);
+      }
+      break;
+    case T_ID:
+      id2s(value, sid);
+      snprintf(aux, len - 1, "'%s'", sid);
+      break;
+    case T_HEX:
+      switch (size) {
+        case 1: snprintf(aux, len - 1, "0x%02X", value); break;
+        case 2: snprintf(aux, len - 1, "0x%04X", value); break;
+        case 4: snprintf(aux, len - 1, "0x%08X", value); break;
+      }
+      break;
+    case T_STR:
+      if (value) {
+        for (j = 0; j < sizeof(str) - 1; j++) {
+          str[j] = EmMemGet8(value + j);
+          if (str[j] == 0) break;
         }
+        str[j] = 0;
+        snprintf(aux, len - 1, "\"%s\"", str);
+      } else {
+        snprintf(aux, len - 1, "NULL");
+      }
+      break;
+    case T_RGB:
+      red   = EmMemGet8(value + 1);
+      green = EmMemGet8(value + 2);
+      blue  = EmMemGet8(value + 3);
+      snprintf(aux, len - 1, "rgb{%d,%d,%d}", red, green, blue);
+      break;
+    default:
+      snprintf(aux, len - 1, "type_%u", type);
+      break;
+  }
 
   return aux;
 }
@@ -422,6 +429,10 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
         value = gCPU->GetRegister(e68KRegID_D0);
       }
       if (log_f) {
+        switch (allTraps[trap].rsize) {
+          case 1: value &= 0xFF; break;
+          case 2: value &= 0xFFFF; break;
+        }
         param_value(allTraps[trap].rtype, value, allTraps[trap].rsize, buf, sizeof(buf));
         fprintf(log_f, "0x%08X: trap 0x%04X %s%s return %s\n", pc, trap, spaces(stackp), allTraps[trap].name, buf);
       }
@@ -453,8 +464,8 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
           if (EmMemGet32(sp + 2) == log_dbID) {
             log_dbRef = value;
             fprintf(stdout, "Monitoring dbRef 0x%08X for dbID 0x%08X\n", log_dbRef, log_dbID);
-	  }
-	}
+          }
+        }
         break;
       case sysTrapSysAppStartup:
         // Err SysAppStartup(SysAppInfoPtr *appInfoPP, MemPtr *prevGlobalsP, MemPtr *globalsPtrP)
@@ -464,8 +475,8 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
           if (EmMemGet32(value + 16) == log_dbRef) {
             fprintf(stdout, "Logging system calls for dbRef 0x%08X dbID 0x%08X\n", log_dbRef, log_dbID);
             log_f = fopen("syscalls.txt", "w");
-	  }
-	}
+          }
+        }
         break;
       case sysTrapSysAppExit:
         if (log_f) {
@@ -474,7 +485,7 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
           log_dbID = 0;
           log_dbRef = 0;
           log_f = NULL;
-	}
+        }
         break;
     }
   }
@@ -522,7 +533,7 @@ static void trapHook(uint32_t pc, uint32_t sp, uint16_t trap, uint32_t nextpc) {
       buf[0] = 0;
       for (i = 0; i < allTraps[trap].nargs; i++) {
         switch (allTraps[trap].args[i].size) {
-          case 1: value = EmMemGet16(sp + idx) & 0xFF; idx += 2; break;
+          case 1: value = EmMemGet8(sp + idx);  idx += 2; break;
           case 2: value = EmMemGet16(sp + idx); idx += 2; break;
           case 4: value = EmMemGet32(sp + idx); idx += 4; break;
           default: value = 0; break;
