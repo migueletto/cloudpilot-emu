@@ -57,6 +57,7 @@ struct Options {
     bool traceInstaller;
     optional<string> mountImage;
     DebuggerConfiguration debuggerConfiguration;
+    optional<string> traceSyscalls;
 };
 
 void handleSuspend() {
@@ -225,6 +226,8 @@ void run(const Options& options) {
     IMG_Quit();
 }
 
+const char *traceSyscalls = NULL;
+
 int main(int argc, const char** argv) {
     class bad_device_id : public exception {};
 
@@ -326,6 +329,10 @@ int main(int argc, const char** argv) {
         .default_value(false)
         .implicit_value(true);
 
+    program.add_argument("--trace-syscalls")
+        .metavar("<trace syscalls>")
+        .help("trace system calls for an app");
+
     try {
         program.parse_args(argc, argv);
     } catch (const bad_device_id& e) {
@@ -359,6 +366,11 @@ int main(int argc, const char** argv) {
     options.scriptFile = program.present("--script");
     options.proxyInsecure = program.get<bool>("--proxy-insecure");
     options.proxyCa = program.present("--proxy-ca");
+    options.traceSyscalls = program.present("--trace-syscalls");
+
+    if (options.traceSyscalls) {
+      traceSyscalls = options.traceSyscalls->c_str();
+    }
 
 #ifdef ENABLE_DEBUGGER
     if (auto port = program.present<unsigned int>("--listen"))

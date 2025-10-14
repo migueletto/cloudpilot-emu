@@ -404,6 +404,7 @@ static void dumpMemory(uint32_t addr, uint32_t offset, uint32_t len) {
 static uint32_t log_dbID = 0;
 static uint32_t log_dbRef = 0;
 static FILE *log_f = NULL;
+extern const char *traceSyscalls;
 
 void trapReturnHook(uint32_t pc, uint32_t sp) {
   char buf[256];
@@ -431,7 +432,7 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
     switch (trap) {
       case sysTrapDmDatabaseInfo:
         // Err DmDatabaseInfo(UInt16 cardNo, LocalID dbID, Char *nameP, ...
-        if (log_f == NULL && log_dbID == 0 && value == 0) {
+        if (traceSyscalls && log_f == NULL && log_dbID == 0 && value == 0) {
           name = EmMemGet32(sp + 6);
           if (name) {
             for (i = 0; i < sizeof(buf) - 1; i++) {
@@ -439,9 +440,9 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
               if (buf[i] == 0) break;
             }
             buf[i] = 0;
-            if (strcmp(buf, "Memo Pad") == 0) {
+            if (strcmp(buf, traceSyscalls) == 0) {
               log_dbID = EmMemGet32(sp + 2);
-              fprintf(stdout, "\nMonitoring dbID 0x%08X for \"%s\"\n", log_dbID, buf);
+              fprintf(stdout, "\nMonitoring dbID 0x%08X for \"%s\"\n", log_dbID, traceSyscalls);
             }
           }
         }
