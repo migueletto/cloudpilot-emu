@@ -34,6 +34,7 @@
 #include "UAE.h"  // CHECK_STACK_POINTER_DECREMENT
 
 #include "Palm.h"
+#include <stdarg.h>
 
 #define LOG_FUNCTION_CALLS 0
 
@@ -247,13 +248,14 @@ extern "C" {
 static uint32_t stackp;
 static uint32_t stack[256];
 static uint32_t stackt[256];
+static uint32_t stacksel[256];
 
 static trap_t allTraps[0x10000];
 
 static int allTrapsInited = 0;
 
 static void allTrapsInit(void) {
-  int i;
+  uint32_t trap, selector, i;
 
   for (i = 0; i < 0x10000; i++) {
     allTraps[i] = {0};
@@ -261,7 +263,31 @@ static void allTrapsInit(void) {
   }
 
   for (i = 0; trapArgs[i].name; i++) {
-    allTraps[trapArgs[i].trap] = trapArgs[i];
+    trap = trapArgs[i].trap;
+    selector = trapArgs[i].selector;
+    if (selector == (uint32_t)-1) {
+      allTraps[trap] = trapArgs[i];
+    } else {
+      if (allTraps[trap].trap == 0) {
+        allTraps[trap].trap = trap;
+        allTraps[trap].name = "dispatch";
+        allTraps[trap].capsel = selector < 256 ? 256 : selector + 256;
+        allTraps[trap].numsel = 1;
+        allTraps[trap].selectors = (trap_t *)calloc(allTraps[trap].capsel, sizeof(trap_t));
+        allTraps[trap].selectors[selector] = trapArgs[i];
+      } else {
+        if (selector >= allTraps[trap].capsel) {
+          allTraps[trap].capsel = selector + 256;
+          if (allTraps[trap].selectors) {
+            allTraps[trap].selectors = (trap_t *)realloc(allTraps[trap].selectors, allTraps[trap].capsel * sizeof(trap_t));
+          } else {
+            allTraps[trap].selectors = (trap_t *)calloc(allTraps[trap].capsel, sizeof(trap_t));
+          }
+        }
+        allTraps[trap].selectors[selector] = trapArgs[i];
+        allTraps[trap].numsel++;
+      }
+    }
   }
 }
 
@@ -283,67 +309,130 @@ static char *id2s(uint32_t ID, char *s) {
   return s;
 }
 
-static char *param_value(uint32_t type, uint32_t value, uint32_t size, char *aux, uint32_t len) {
+static char *param_value(uint32_t type, uint32_t ptr, uint32_t size, uint32_t value, char *aux, uint32_t len) {
   char str[128], sid[8];
   uint8_t red, green, blue;
+  uint16_t etype;
+  int16_t x, y, dx, dy;
   uint32_t j;
+  int32_t sig;
+  uint32_t usig;
 
-  switch (type) {
-    case T_SIG:  snprintf(aux, len - 1, "%d", (int32_t)value); break;
-    case T_USIG: snprintf(aux, len - 1, "%u", value); break;
-    case T_PTR:
-      if (value) {
-        snprintf(aux, len - 1, "0x%08X", value);
-      } else {
-        snprintf(aux, len - 1, "NULL");
+  if (ptr) {
+    if (value) {
+      switch (type) {
+        case T_VOID:
+          snprintf(aux, len - 1, "0x%08X", value);
+          break;
+        case T_STR:
+          for (j = 0; j < sizeof(str) - 1; j++) {
+            str[j] = EmMemGet8(value + j);
+            if (str[j] == 0) break;
+          }
+          str[j] = 0;
+          snprintf(aux, len - 1, "\"%s\"", str);
+          break;
+        case T_RGB:
+          red   = EmMemGet8(value + 1);
+          green = EmMemGet8(value + 2);
+          blue  = EmMemGet8(value + 3);
+          snprintf(aux, len - 1, "rgb{%d,%d,%d}", red, green, blue);
+        break;
+        case T_EVT:
+          etype = EmMemGet16(value);
+          snprintf(aux, len - 1, "event{%d 0x%04X}", etype, etype);
+          break;
+        case T_RCT:
+          x = EmMemGet16(value);
+          y = EmMemGet16(value + 2);
+          dx = EmMemGet16(value + 4);
+          dy = EmMemGet16(value + 6);
+          snprintf(aux, len - 1, "rect{%d,%d,%d,%d}", x, y, dx, dy);
+          break;
+        case T_SIG:
+          sig = 0;
+          if (!(value % 2))
+          switch (size) {
+            case 1: sig = (int8_t)EmMemGet8(value); break;
+            case 2: sig = (int16_t)EmMemGet16(value); break;
+            case 4: sig = (int32_t)EmMemGet32(value); break;
+	    default: sig = 0; break;
+          }
+          snprintf(aux, len - 1, "int{%d}", sig);
+          break;
+        case T_USIG:
+          usig = 0;
+          if (!(value % 2))
+          switch (size) {
+            case 1: usig = EmMemGet8(value); break;
+            case 2: usig = EmMemGet16(value); break;
+            case 4: usig = EmMemGet32(value); break;
+	    default: usig = 0; break;
+          }
+          snprintf(aux, len - 1, "uint{%u}", usig);
+          break;
+        case T_HEX:
+          usig = 0;
+          if (!(value % 2))
+          switch (size) {
+            case 1:
+              usig = EmMemGet8(value);
+              snprintf(aux, len - 1, "uint{0x%02X}", usig);
+	      break;
+            case 2:
+              usig = EmMemGet16(value);
+              snprintf(aux, len - 1, "uint{0x%04X}", usig);
+	      break;
+            case 4:
+              usig = EmMemGet32(value);
+              snprintf(aux, len - 1, "uint{0x%08X}", usig);
+	      break;
+          }
+          break;
+        case T_ID:
+          usig = 0;
+          if (!(value % 2))
+          usig = EmMemGet32(value);
+          id2s(usig, sid);
+          snprintf(aux, len - 1, "'%s'", sid);
+          break;
+        default:
+          snprintf(aux, len - 1, "type_%u", type);
+          break;
       }
-      break;
-    case T_CHAR:
-      if (value < 0x7F) {
-        snprintf(aux, len - 1, "'%c'", (char)value);
-      } else {
-        snprintf(aux, len - 1, "0x%02X", value);
-      }
-      break;
-    case T_WCHR:
-      if (value < 0x7F) {
-        snprintf(aux, len - 1, "'%c'", (char)value);
-      } else {
-        snprintf(aux, len - 1, "0x%04X", value);
-      }
-      break;
-    case T_ID:
-      id2s(value, sid);
-      snprintf(aux, len - 1, "'%s'", sid);
-      break;
-    case T_HEX:
-      switch (size) {
-        case 1: snprintf(aux, len - 1, "0x%02X", value); break;
-        case 2: snprintf(aux, len - 1, "0x%04X", value); break;
-        case 4: snprintf(aux, len - 1, "0x%08X", value); break;
-      }
-      break;
-    case T_STR:
-      if (value) {
-        for (j = 0; j < sizeof(str) - 1; j++) {
-          str[j] = EmMemGet8(value + j);
-          if (str[j] == 0) break;
+    } else {
+      snprintf(aux, len - 1, "NULL");
+    }
+  } else {
+    switch (type) {
+      case T_SIG:  snprintf(aux, len - 1, "%d", (int32_t)value); break;
+      case T_USIG: snprintf(aux, len - 1, "%u", value); break;
+      case T_CHAR:
+        if (value >= 0x20 && value < 0x7F) {
+          snprintf(aux, len - 1, "'%c'", (char)value);
+        } else {
+          snprintf(aux, len - 1, "0x%02X", value);
         }
-        str[j] = 0;
-        snprintf(aux, len - 1, "\"%s\"", str);
-      } else {
-        snprintf(aux, len - 1, "NULL");
-      }
-      break;
-    case T_RGB:
-      red   = EmMemGet8(value + 1);
-      green = EmMemGet8(value + 2);
-      blue  = EmMemGet8(value + 3);
-      snprintf(aux, len - 1, "rgb{%d,%d,%d}", red, green, blue);
-      break;
-    default:
-      snprintf(aux, len - 1, "type_%u", type);
-      break;
+        break;
+      case T_WCHR:
+        if (value >= 0x20 && value < 0x7F) {
+          snprintf(aux, len - 1, "'%c'", (char)value);
+        } else {
+          snprintf(aux, len - 1, "0x%04X", value);
+        }
+        break;
+      case T_ID:
+        id2s(value, sid);
+        snprintf(aux, len - 1, "'%s'", sid);
+        break;
+      case T_HEX:
+        switch (size) {
+          case 1: snprintf(aux, len - 1, "0x%02X", value); break;
+          case 2: snprintf(aux, len - 1, "0x%04X", value); break;
+          case 4: snprintf(aux, len - 1, "0x%08X", value); break;
+        }
+        break;
+    }
   }
 
   return aux;
@@ -413,31 +502,95 @@ static uint32_t log_dbRef = 0;
 static FILE *log_f = NULL;
 extern const char *traceSyscalls;
 
+static char hex(uint8_t n) {
+  n &= 0x0F;
+  return n < 10 ? '0' + n : 'A' + n - 10;
+}
+
+static void log(char *fmt, ...) {
+  char tmp[1024], buf[1024];
+  uint32_t i, j;
+  va_list ap;
+
+  va_start(ap, fmt);
+  vsnprintf(tmp, sizeof(tmp)-1, fmt, ap);
+  va_end(ap);
+
+  for (i = 0, j = 0; tmp[i] && j < sizeof(buf)-5; i++) {
+    if (tmp[i] >= 32) {
+      buf[j++] = tmp[i];
+    } else if (tmp[i+1]) {
+      buf[j++] = '<';
+      buf[j++] = hex((tmp[i] >> 4) & 0x0F);
+      buf[j++] = hex(tmp[i] & 0x0F);
+      buf[j++] = '>';
+    }
+  }
+  buf[j] = 0;
+
+  fprintf(log_f, "%s\n", buf);
+}
+
+static void print_params(trap_t *trap, uint32_t sp, char *buf, uint32_t len) {
+  uint32_t value, idx, i;
+  char aux[256];
+
+  idx = 0;
+  buf[0] = 0;
+  for (i = 0; i < trap->nargs; i++) {
+    if (trap->args[i].ptr) {
+      value = EmMemGet32(sp + idx); idx += 4;
+    } else {
+      switch (trap->args[i].size) {
+        case 1: value = EmMemGet8(sp + idx);  idx += 2; break;
+        case 2: value = EmMemGet16(sp + idx); idx += 2; break;
+        case 4: value = EmMemGet32(sp + idx); idx += 4; break;
+        default: value = 0; break;
+      }
+    }
+    param_value(trap->args[i].type, trap->args[i].ptr, trap->args[i].size, value, aux, sizeof(aux));
+    if (i > 0) strncat(buf, ", ", len - strlen(buf) - 1);
+    strncat(buf, aux, len - strlen(buf) - 1);
+  }
+}
+
 void trapReturnHook(uint32_t pc, uint32_t sp) {
-  char buf[256];
-  uint32_t name, value;
+  char buf[1024], rbuf[256];
+  uint32_t name, value, selector;
   uint16_t trap, i;
+  char *s;
 
   if (stackp && pc == stack[stackp-1]) {
     value = 0;
     stackp--;
     trap = stackt[stackp];
+    selector = stacksel[stackp];
+    rbuf[0] = 0;
+
     if (allTraps[trap].rsize > 0) {
-      if (allTraps[trap].rtype == T_PTR || allTraps[trap].rtype == T_STR) {
+      strcpy(rbuf, ": ");
+      if (allTraps[trap].rtype == T_VOID || allTraps[trap].rtype == T_STR) {
         value = gCPU->GetRegister(e68KRegID_A0);
       } else {
         value = gCPU->GetRegister(e68KRegID_D0);
       }
-      if (log_f) {
-        switch (allTraps[trap].rsize) {
-          case 1: value &= 0xFF; break;
-          case 2: value &= 0xFFFF; break;
-        }
-        param_value(allTraps[trap].rtype, value, allTraps[trap].rsize, buf, sizeof(buf));
-        fprintf(log_f, "0x%08X: trap 0x%04X %s%s return %s\n", pc, trap, spaces(stackp), allTraps[trap].name, buf);
+      switch (allTraps[trap].rsize) {
+        case 1: value &= 0xFF; break;
+        case 2: value &= 0xFFFF; break;
       }
-    } else if (log_f) {
-      fprintf(log_f, "0x%08X: trap 0x%04X %s%s return\n", pc, trap, spaces(stackp), allTraps[trap].name);
+      if (log_f) param_value(allTraps[trap].rtype, allTraps[trap].rptr, allTraps[trap].rsize, value, &rbuf[2], sizeof(rbuf) - 2);
+    }
+
+    if (log_f) {
+      if (allTraps[trap].numsel == 0) {
+        print_params(&allTraps[trap], sp, buf, sizeof(buf));
+        log("0x%08X: trap 0x%04X    %s%s(%s)%s", pc, trap, spaces(stackp), allTraps[trap].name, buf, rbuf);
+      } else {
+        print_params(&allTraps[trap].selectors[selector], sp, buf, sizeof(buf));
+	s = allTraps[trap].selectors[selector].name;
+	if (s == NULL) s = "unknown";
+        log("0x%08X: trap 0x%04X.%2d %s%s(%s)%s", pc, trap, selector, spaces(stackp), s, buf, rbuf);
+      }
     }
 
     switch (trap) {
@@ -492,8 +645,8 @@ void trapReturnHook(uint32_t pc, uint32_t sp) {
 }
 
 static void trapHook(uint32_t pc, uint32_t sp, uint16_t trap, uint32_t nextpc) {
-  char buf[1024], aux[256];
-  uint32_t i, value, idx;
+  char *s, buf[1024];
+  uint32_t selector;
 
   if (!allTrapsInited) {
     allTrapsInit();
@@ -529,21 +682,20 @@ static void trapHook(uint32_t pc, uint32_t sp, uint16_t trap, uint32_t nextpc) {
       break;
 
     default:
-      idx = 0;
-      buf[0] = 0;
-      for (i = 0; i < allTraps[trap].nargs; i++) {
-        switch (allTraps[trap].args[i].size) {
-          case 1: value = EmMemGet8(sp + idx);  idx += 2; break;
-          case 2: value = EmMemGet16(sp + idx); idx += 2; break;
-          case 4: value = EmMemGet32(sp + idx); idx += 4; break;
-          default: value = 0; break;
+      selector = gCPU->GetRegister(e68KRegID_D2);
+      if (log_f) {
+        if (allTraps[trap].numsel == 0) {
+          print_params(&allTraps[trap], sp, buf, sizeof(buf));
+          log("0x%08X: trap 0x%04X    %s%s(%s) ...", pc, trap, spaces(stackp), allTraps[trap].name, buf);
+        } else {
+          print_params(&allTraps[trap].selectors[selector], sp, buf, sizeof(buf));
+	  s = allTraps[trap].selectors[selector].name;
+	  if (s == NULL) s = "unknown";
+          log("0x%08X: trap 0x%04X.%2d %s%s(%s) ...", pc, trap, selector, spaces(stackp), s, buf);
         }
-        param_value(allTraps[trap].args[i].type, value, allTraps[trap].args[i].size, aux, sizeof(aux));
-        if (i > 0) strncat(buf, ", ", sizeof(buf) - strlen(buf) - 1);
-        strncat(buf, aux, sizeof(buf) - strlen(buf) - 1);
       }
-      if (log_f) fprintf(log_f, "0x%08X: trap 0x%04X %s%s(%s) ... 0x%08X\n", pc, trap, spaces(stackp), allTraps[trap].name, buf, nextpc);
       stackt[stackp] = trap;
+      stacksel[stackp] = selector;
       stack[stackp++] = nextpc;
       break;
   }
