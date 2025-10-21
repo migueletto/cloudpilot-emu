@@ -1,7 +1,7 @@
 -include ../Makefile.local
 
 CFLAGS_COMMON = -Wextra -Wall -Wno-unused-parameter -Wno-pragma-pack -Wno-multichar -Wno-unknown-pragmas \
-	-Wno-missing-field-initializers -DEMULATION_LEVEL=EMULATION_UNIX
+	-Wno-missing-field-initializers -DEMULATION_LEVEL=EMULATION_UNIX -D_DEFAULT_SOURCE
 
 CFLAGS_EMCC_EXTRA = -D_POSIX_SOURCE
 
@@ -47,7 +47,8 @@ SOURCE_C = \
 	nanopb/pb_common.c \
 	nanopb/pb_encode.c \
 	nanopb/pb_decode.c \
-	proto/networking.pb.c
+	proto/networking.pb.c \
+	emulator/logtrap.c
 
 SOURCE_CXX = \
 	emulator/uae/readcpu.cpp \

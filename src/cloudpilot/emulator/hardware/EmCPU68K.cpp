@@ -39,6 +39,8 @@
 #include "savestate/SavestateLoader.h"
 #include "savestate/SavestateStructures.h"
 
+#include "logtrap.h"
+
 // #define TRACE_FUNCTION_CALLS
 
 constexpr uint32 SAVESTATE_VERSION = 1;
@@ -353,7 +355,8 @@ void EmCPU68K::DoSaveLoad(T& helper) {
 //		� EmCPU68K::Execute
 // ---------------------------------------------------------------------------
 
-void trapReturnHook(uint32_t pc, uint32_t sp);
+extern logtrap_def ldef;
+extern logtrap_t *lt;
 
 uint32 EmCPU68K::Execute(uint32 maxCycles) {
     // This function is the bottleneck for all 68K emulation.  It's
@@ -420,7 +423,7 @@ uint32 EmCPU68K::Execute(uint32 maxCycles) {
 
         EmOpcode68K opcode;
 
-        trapReturnHook(pc, GetSP());
+        ldef.rethook(lt, pc);
         opcode = EmMemGet16(pc);
 #ifdef TRACE_FUNCTION_CALLS
         traceFunctionCalls(opcode, pc);
