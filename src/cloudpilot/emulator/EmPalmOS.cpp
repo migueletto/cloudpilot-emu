@@ -69,11 +69,12 @@ static uint32_t logtrap_read32(uint32_t addr, void *data) {
 static uint32_t logtrap_getreg(uint32_t reg, void *data) {
   uint32_t value = 0;
 
-  switch (reg) {
-    case logtrap_A0: value = gCPU->GetRegister(e68KRegID_A0); break;
-    case logtrap_D0: value = gCPU->GetRegister(e68KRegID_D0); break;
-    case logtrap_D2: value = gCPU->GetRegister(e68KRegID_D2); break;
-    case logtrap_SP: value = gCPU->GetSP(); break;
+  if (reg == logtrap_SP) {
+    value =  gCPU->GetSP();
+  } else if (reg >= logtrap_A0 && reg < logtrap_A0 + 8) {
+    value = gCPU->GetRegister(e68KRegID_A0 + reg - logtrap_A0);
+  } else if (reg >= logtrap_D0 && reg < logtrap_D0 + 8) {
+    value = gCPU->GetRegister(e68KRegID_D0 + reg - logtrap_D0);
   }
 
   return value;
@@ -94,6 +95,12 @@ logtrap_def ldef = {
 logtrap_t *lt = NULL;
 
 extern const char *traceSyscalls;
+
+extern "C" {
+char *m68k_trapname(uint16_t trap, uint16_t *selector, int follow) {
+  return logtrap_trapname(lt, trap, selector, follow);
+}
+};
 
 #define LOG_FUNCTION_CALLS 0
 
@@ -141,11 +148,12 @@ void EmPalmOS::Initialize(void) {
 
     EmPatchMgr::Initialize();
 
+    logtrap_global_init(&ldef);
     lt = logtrap_init(&ldef);
 
     if (traceSyscalls) {
       log_f = fopen("syscalls.txt", "w");
-      logtrap_start(lt, (char *)traceSyscalls);
+      logtrap_start(lt, 0, (char *)traceSyscalls);
     }
 }
 
@@ -195,6 +203,7 @@ void EmPalmOS::Dispose(void) {
 
     if (lt) {
       logtrap_finish(lt);
+      logtrap_global_finish(&ldef);
       lt = NULL;
     }
 
@@ -387,7 +396,7 @@ Bool EmPalmOS::HandleSystemCall(Bool fromTrap) {
 
     //trapHook(gCPU->GetPC() - 2, gCPU->GetSP(), context.fTrapWord, context.fNextPC);
     if (lt) {
-      ldef.hook(lt, gCPU->GetPC() - 2, context.fTrapWord);
+      ldef.hook(lt, gCPU->GetPC() - 2);
     }
 
     if (result == kSkipROM) {

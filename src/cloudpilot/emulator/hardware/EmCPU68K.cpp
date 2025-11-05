@@ -439,6 +439,8 @@ uint32 EmCPU68K::Execute(uint32 maxCycles) {
 
         // Perform periodic tasks.
 
+        ldef.hook2(lt, pc);
+
         CYCLE(false);
 
     StoppedLoop:
